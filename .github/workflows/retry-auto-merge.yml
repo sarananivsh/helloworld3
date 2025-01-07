@@ -19,11 +19,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gh
 
-      - name: Authenticate GitHub CLI
-        run: |
-          # Authenticate using the GITHUB_TOKEN provided by GitHub Actions
-          echo "$GITHUB_TOKEN" | gh auth login --with-token
-
       - name: Retry failed auto-merges
         run: |
           # Check all open PRs and attempt to merge those that failed auto-merge
