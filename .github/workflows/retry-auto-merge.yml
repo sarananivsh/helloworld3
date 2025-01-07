@@ -1,5 +1,3 @@
-name: Auto Retry Dependencies Merges
-
 on:
   schedule:
     - cron: '*/5 * * * *'  # Runs every hour
@@ -18,11 +16,6 @@ jobs:
           # Install GitHub CLI
           sudo apt-get update
           sudo apt-get install -y gh
-
-      - name: Authenticate GitHub CLI
-        run: |
-          # Authenticate using the GITHUB_TOKEN provided by GitHub Actions
-          echo "$GITHUB_TOKEN" | gh auth login --with-token
 
       - name: Get all open PRs with 'dependencies' label
         id: pr_list
