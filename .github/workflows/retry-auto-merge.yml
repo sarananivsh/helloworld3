@@ -2,7 +2,7 @@ name: Auto Retry Failed PR Merges
 
 on:
   schedule:
-    - cron: '*/5 * * * *'  # Runs every hour
+    - cron: '0 * * * *'  # Runs every hour
   workflow_dispatch:  # Allows manual triggering of the workflow
 
 jobs:
@@ -14,11 +14,11 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Set up GitHub CLI
-        uses: cli/cli@v2
+        uses: github-cli/cli-action@v2
         with:
           version: 'latest'
 
-      - name: Retry failed auto-merges with rebase
+      - name: Retry failed auto-merges
         run: |
           # Check all open PRs and attempt to merge those that failed auto-merge
           pr_list=$(gh pr list --state open --json number,mergeable -q '.[].number')
@@ -29,16 +29,7 @@ jobs:
             mergeable_status=$(gh pr view $pr_number --json mergeable -q '.mergeable')
 
             if [[ "$mergeable_status" == "CONFLICT" ]]; then
-                echo "PR #$pr_number has conflicts. Attempting to rebase..."
-
-                # Try to rebase the PR to resolve conflicts
-                gh pr checkout $pr_number
-                git fetch origin
-                git rebase origin/main  # Replace 'main' with your target branch if different
-                git push --force
-
-                # Try merging after rebase
-                gh pr merge $pr_number --merge --auto --delete-branch || echo "Failed to merge PR #$pr_number after rebase."
+                echo "PR #$pr_number has conflicts. Skipping merge attempt."
             elif [[ "$mergeable_status" == "UNKNOWN" ]]; then
                 echo "PR #$pr_number is in an unknown state. Skipping merge attempt."
             else
