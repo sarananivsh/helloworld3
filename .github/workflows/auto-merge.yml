@@ -1,20 +1,76 @@
-name: Auto Merge PR and Delete Branch if 'dependencies' label is present
+name: Auto Merge PRs and Delete Branch if 'dependencies' label is present
 
 on:
+  workflow_dispatch:  # Manual trigger for the workflow
+  schedule:
+    - cron: '0 * * * *'  # Runs every hour
   pull_request:
     types:
       - labeled
       - synchronize
       - opened
     branches:
-      - main  # Adjust to your branch name
+      - main
 
 permissions:
-  contents: write  # Required for merging
-  pull-requests: write  # Grant permissions to merge PRs
+  contents: write
+  pull-requests: write
 
 jobs:
+  create_backup_branch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Trigger create-backup-branch workflow
+        uses: actions/github-script@v6
+        with:
+          script: |
+            try {
+              // Ensure that github.context is available
+              if (!github.context || !github.context.repo) {
+                throw new Error('GitHub context is not properly initialized.');
+              }
+
+              // Access the repository owner and repo name from the context
+              const owner = github.context.repo.owner;
+              const repo = github.context.repo.repo;
+
+              if (!owner || !repo) {
+                throw new Error('Repository owner or name is missing in the context.');
+              }
+
+              // Fetch workflows for the given repository
+              const workflows = await github.rest.actions.listRepoWorkflows({
+                owner: owner,
+                repo: repo
+              });
+
+              const workflow = workflows.data.find(wf => wf.name === 'create-backup-branch.yml');
+
+              if (!workflow) {
+                throw new Error('Workflow "create-backup-branch.yml" not found.');
+              }
+
+              // Trigger the workflow dispatch
+              const workflowId = workflow.id;
+
+              const response = await github.rest.actions.createWorkflowDispatch({
+                owner: owner,
+                repo: repo,
+                workflow_id: workflowId,
+                ref: 'refs/heads/main'
+              });
+
+              console.log('Backup branch workflow triggered successfully:', response);
+            } catch (error) {
+              console.error('Error triggering backup branch workflow:', error.message);
+            }
+
   auto-merge:
+    needs: create_backup_branch
     runs-on: ubuntu-latest
 
     steps:
