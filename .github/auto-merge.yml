@@ -1,25 +1,89 @@
-
-name: Auto Merge PR with 'automerge' Label
+name: Auto Merge PRs and Delete Branch if 'dependencies' label is present
 
 on:
+  workflow_dispatch:  # Manual trigger for the workflow
+  schedule:
+    - cron: '0 * * * *'  # Runs every hour
   pull_request:
+    types:
+      - labeled
+      - synchronize
+      - opened
     branches:
       - main
-    types:
-      - opened
-      - synchronize
+
+permissions:
+  contents: write
+  pull-requests: write
 
 jobs:
-  auto-merge:
+  create_backup_branch:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
-      - name: Auto Merge PR if 'chore' label is present
-        uses: peter-evans/auto-merge@v2
+      - name: Trigger create-backup-branch workflow
+        uses: actions/github-script@v6
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          merge_label: "chore"  # Only merges PRs with the 'automerge' label
-          merge_method: merge
+          script: |
+            try {
+              // Ensure that github.context is available
+              if (!github.context || !github.context.repo) {
+                throw new Error('GitHub context is not properly initialized.');
+              }
+
+              // Access the repository owner and repo name from the context
+              const owner = github.context.repo.owner;
+              const repo = github.context.repo.repo;
+
+              if (!owner || !repo) {
+                throw new Error('Repository owner or name is missing in the context.');
+              }
+
+              // Fetch workflows for the given repository
+              const workflows = await github.rest.actions.listRepoWorkflows({
+                owner: owner,
+                repo: repo
+              });
+
+              const workflow = workflows.data.find(wf => wf.name === 'create-backup-branch.yml');
+
+              if (!workflow) {
+                throw new Error('Workflow "create-backup-branch.yml" not found.');
+              }
+
+              // Trigger the workflow dispatch
+              const workflowId = workflow.id;
+
+              const response = await github.rest.actions.createWorkflowDispatch({
+                owner: owner,
+                repo: repo,
+                workflow_id: workflowId,
+                ref: 'refs/heads/main'
+              });
+
+              console.log('Backup branch workflow triggered successfully:', response);
+            } catch (error) {
+              console.error('Error triggering backup branch workflow:', error.message);
+            }
+
+  auto-merge:
+    needs: create_backup_branch
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Check if PR has 'dependencies' label
+        if: contains(github.event.pull_request.labels.*.name, 'dependencies')
+        run: echo "PR has 'dependencies' label. Proceeding with merge."
+
+      - name: Merge PR if label is present
+        if: contains(github.event.pull_request.labels.*.name, 'dependencies')
+        run: |
+          gh pr merge ${{ github.event.pull_request.number }} --merge --auto --delete-branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
