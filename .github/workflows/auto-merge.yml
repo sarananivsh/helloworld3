@@ -24,23 +24,28 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Trigger create-backup-branch workflow
+      - name: Get repository details and trigger backup branch workflow
         uses: actions/github-script@v6
         with:
           script: |
             try {
-              // Verify that the context and repo information is available
-              const { repo, owner } = github.context.repo;
+              // Retrieve repository owner and name from context directly
+              const owner = github.context.repo.owner;
+              const repo = github.context.repo.repo;
 
-              if (!repo || !owner) {
-                throw new Error('GitHub context is missing repo or owner information');
+              if (!owner || !repo) {
+                throw new Error('Missing owner or repo information from context.');
               }
+
+              console.log('Repository details:', owner, repo);
 
               // List workflows in the repository
               const workflows = await github.rest.actions.listRepoWorkflows({
                 owner: owner,
                 repo: repo,
               });
+
+              console.log('Workflows available:', workflows.data);
 
               // Find the workflow ID for the 'create-backup-branch.yml'
               const workflow = workflows.data.find(wf => wf.name === 'create-backup-branch.yml');
